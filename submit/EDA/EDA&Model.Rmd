@@ -1,0 +1,200 @@
+---
+title: "EDA&Model"
+author: "HongnaSu"
+date: "2024-11-21"
+output: pdf_document
+---
+
+```{r echo=FALSE}
+library(dplyr)
+library(ggplot2)
+library(WDI)
+library(rstanarm)
+```
+
+#EDA
+
+data clean 
+GDP
+```{r}
+
+gdp<- WDI(country = "NZ", indicator = "NY.GDP.MKTP.CD", start = 1983, end = 2022)
+colnames(gdp) <- c("1","2","3", "year","gdp")
+gdp1<-gdp%>% select(-1,-2,-3)
+#reverse
+gdp2<- gdp1[nrow(gdp1):1, ]
+gdp_nz<-data.frame(gdp2)
+
+```
+income
+```{r}
+income<- WDI(country = "NZ", indicator = "NY.GDP.PCAP.CD", start = 1983, end = 2022)
+colnames(income) <- c("1","2","3", "4","income")
+income1<-income%>% select(-1,-2,-3,-4)
+#reverse
+income2<-income1[nrow(income1):1, ]
+income_nz<-data.frame(income2)
+```
+
+imput&output
+```{r}
+trade<- WDI(country = "NZ", indicator = c("NE.EXP.GNFS.CD", "NE.IMP.GNFS.CD"), start = 1983, end = 2022)
+colnames(trade) <- c("1","2","3", "4","input","output")
+trade1<-trade%>% select(-1,-2,-3,-4)
+trade_nz<-data.frame(trade1)
+```
+
+population
+```{r}
+#Get population data
+population <- WDI(country = "NZ", indicator = "SP.POP.TOTL", start = 1983, end = 2022)
+colnames(population) <- c("1","2","3", "4","population")
+population1<-population%>% select(-1,-2,-3,-4)
+#reverse
+population2<- population1[nrow(population1):1, ]
+population_nz<-data.frame(population2)
+
+```
+visitor
+```{r}
+visitor<- WDI(country = "NZ", indicator = "ST.INT.ARVL", start = 1983, end = 2022)
+colnames(visitor) <- c("1","2","3", "4","visitor")
+visitor1<-visitor%>% select(-1,-2,-3,-4)
+#reverse
+visitor2<-visitor1[nrow(visitor1):1, ]
+visitor_nz<-data.frame(visitor2)
+```
+inflation
+```{r}
+inflation<- WDI(country = "NZ", indicator = "FP.CPI.TOTL.ZG", start = 1983, end = 2022)
+colnames(inflation) <- c("1","2","3", "4","inflation")
+inflation1<-inflation%>% select(-1,-2,-3,-4)
+#reverse
+inflation2<-inflation1[nrow(inflation1):1, ]
+inflation_nz<-data.frame(inflation2)
+```
+dataframe
+```{r}
+#combine all cleaned data
+data_nz<-bind_cols(gdp_nz, income_nz,population_nz,trade_nz,visitor_nz,inflation_nz)
+
+summary(data_nz)
+```
+visualization
+```{r echo=FALSE}
+  ggplot(data_nz, aes(x =year, y = gdp)) +
+  geom_point() +
+  geom_smooth(color = "blue")
+  theme_minimal() +
+  labs(title = "gdp change from1983-2023", x = "year", y = "gdp")
+  
+  ggplot(data_nz, aes(x =year, y = income2)) +
+  geom_point() +
+  geom_smooth(color = "blue")
+  theme_minimal() +
+  labs(title = "income change from1983-2023", x = "year", y = "income")
+  
+  ggplot(data_nz, aes(x =year, y =population2)) +
+  geom_point() +
+  geom_smooth(color = "blue")
+  theme_minimal() +
+  labs(title = "population change from1983-2023", x = "year", y = "population")
+  
+  ggplot(data_nz, aes(x =year, y = visitor2)) +
+  geom_point() +
+  geom_smooth(color = "blue")
+  theme_minimal() +
+  labs(title = "number of visitor change from1983-2023", x = "year", y = "visitor")
+  
+  ggplot(data_nz, aes(x =year, y =input)) +
+  geom_point() +
+  geom_smooth(color = "blue")
+  theme_minimal() +
+  labs(title = "input change from1983-2023", x = "year", y = "input")
+  
+  ggplot(data_nz, aes(x =year, y =output)) +
+  geom_point() +
+  geom_smooth(color = "blue")
+  theme_minimal() +
+  labs(title = "input change from1983-2023", x = "year", y = "output")
+  
+  ggplot(data_nz, aes(x =year, y =inflation2)) +
+  geom_point() +
+  geom_smooth(color = "blue")
+  theme_minimal() +
+  labs(title = "inflation from1983-2023", x = "year", y = "inflation")
+```
+As we can see from the graphs,GDP,income,population,input,output are linear,which are upwards,and inflation show downwards trend.For visitor,standard error is too big,there are a lot of missing data,especially there is a outlier 2020(because of Covid) makes the curve downwards.These may affect the analyse,we will see in regression part.
+
+
+Model
+
+This should be a linear problem,so I will consider linear model.
+
+linear model
+```{r}
+regression1<-lm(gdp~income2+population2+input+output+visitor2+inflation2,data_nz)
+summary(regression1)
+```
+From T test we can see intercept,GDP,income is small enough to indicate strong effect,for but rest of them might not enough,I might choose another model.
+
+Then I use GLM and I remove visitor
+```{r echo=FALSE}
+regression<-stan_glm(gdp~income2+population2+input+output+inflation2,data_nz,family = gaussian)
+summary(regression)
+```
+Since Rhat = 1.0, it indicates that the model has converged and the model's stability is good.
+
+Prediction
+First I get 2023 economic informations
+```{r}
+data_2023_nz<-data.frame(income2=48527.83,population2=5223100,input=50770000000,output=42210000000,inflation2=5.733163)
+```
+
+```{r echo=FALSE}
+predicted_GDP_2023<- posterior_predict(regression, newdata = data_2023_nz)
+gdp_2023<-mean(predicted_GDP_2023)
+gdp_2023
+```
+Seem its not close,maybe input and output are too much partial in this  model,and in 2023,input and out put decreased a lot,made the model not accuracy.I try to remove input and out put
+
+```{r echo=FALSE}
+regression2<-stan_glm(gdp~income2+population2+inflation2,data_nz,family = gaussian)
+summary(regression)
+```
+```{r}
+predicted_gdp_2023<- posterior_predict(regression2, newdata = data_2023_nz)
+GDP_2023<-mean(predicted_gdp_2023)
+GDP_2023
+```
+This model is better
+
+Prediction of 2024 GDP
+```{r}
+data_2024_nz<-data.frame(income2=47549.65,population2=5338500,inflation2=5.756)
+```
+
+```{r}
+predicted_gdp_2024<- posterior_predict(regression2, newdata = data_2024_nz)
+GDP_2024<-mean(predicted_gdp_2024)
+GDP_2024
+```
+
+```{r}
+
+write.csv(data_nz, file = "data_nz.csv", row.names = FALSE)
+```
+
+
+```{r}
+library(ggplot2)
+library(tidyr) 
+df_long <-data_nz%>%
+  gather(key = "Variable", value = "Value", gdp,income2, population2,input,output,visitor2,inflation2)
+ggplot(df_long, aes(x = year, y = Value, color = Variable)) +
+  geom_line(size = 1) + 
+  theme_minimal() + 
+  labs(title = "Time Series of GDP, Exports, Imports, and Income",
+       x = "Date", y = "Value") +
+  theme(legend.title = element_blank())
+```
